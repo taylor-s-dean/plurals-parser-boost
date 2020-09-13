@@ -18,7 +18,15 @@ namespace ast {
     struct conditional_op;
     struct expression;
 
-    using BinFunc = std::function<uint(uint, uint)>;
+    struct binary_operator {
+        std::string name;
+        std::function<uint(uint, uint)> op;
+
+        uint
+        operator()(uint lhs, uint rhs) const {
+            return op(lhs, rhs);
+        }
+    };
 
     struct operand : x3::variant<
                          nil,
@@ -32,7 +40,7 @@ namespace ast {
     };
 
     struct binary_op {
-        BinFunc op;
+        binary_operator op;
         operand lhs;
         operand rhs;
     };
@@ -44,7 +52,7 @@ namespace ast {
     };
 
     struct operation {
-        BinFunc op;
+        binary_operator op;
         operand rhs;
     };
 
@@ -75,30 +83,34 @@ namespace parser {
         }
     };
 
-    struct multiplicative_op_ : x3::symbols<ast::BinFunc> {
+#define add_operation(NAME, OP) this->add(NAME, {NAME, OP});
+
+    struct multiplicative_op_ : x3::symbols<ast::binary_operator> {
         multiplicative_op_() {
-            this->add("%", [](uint a, uint b) { return std::fmod(a, b); });
+            add_operation("%", [](uint a, uint b) { return std::fmod(a, b); });
         }
     } multiplicative_op;
 
-    struct logical_op_ : x3::symbols<ast::BinFunc> {
+    struct logical_op_ : x3::symbols<ast::binary_operator> {
         logical_op_() {
-            this->add("&&", std::logical_and<uint>{})(
-                "||", std::logical_or<uint>{});
+            add_operation("&&", std::logical_and<uint>{});
+            add_operation("||", std::logical_or<uint>{});
         }
     } logical_op;
 
-    struct relational_op_ : x3::symbols<ast::BinFunc> {
+    struct relational_op_ : x3::symbols<ast::binary_operator> {
         relational_op_() {
-            this->add("<", std::less<uint>{})("<=", std::less_equal<uint>{})(
-                ">", std::greater<uint>{})(">=", std::greater_equal<uint>{});
+            add_operation("<", std::less<uint>{});
+            add_operation("<=", std::less_equal<uint>{});
+            add_operation(">", std::greater<uint>{});
+            add_operation(">=", std::greater_equal<uint>{});
         }
     } relational_op;
 
-    struct equality_op_ : x3::symbols<ast::BinFunc> {
+    struct equality_op_ : x3::symbols<ast::binary_operator> {
         equality_op_() {
-            this->add("==", std::equal_to<uint>{})(
-                "!=", std::not_equal_to<uint>{});
+            add_operation("==", std::equal_to<uint>{});
+            add_operation("!=", std::not_equal_to<uint>{});
         }
     } equality_op;
 
@@ -108,48 +120,55 @@ namespace parser {
             x3::_val(ctx), at_c<0>(x3::_attr(ctx)), at_c<1>(x3::_attr(ctx))};
     };
 
-    struct expression_class : error_handler {};
-    struct logical_class : error_handler {};
-    struct equality_class : error_handler {};
-    struct relational_class : error_handler {};
+    // clang-format off
+    struct expression_class     : error_handler {};
+    struct logical_class        : error_handler {};
+    struct equality_class       : error_handler {};
+    struct relational_class     : error_handler {};
     struct multiplicative_class : error_handler {};
-    struct primary_class : error_handler {};
-    struct conditional_class : error_handler {};
-    struct variable_class : error_handler {};
+    struct primary_class        : error_handler {};
+    struct conditional_class    : error_handler {};
+    struct variable_class       : error_handler {};
 
     // Rule declarations
-    auto const expression =
-        x3::rule<expression_class, ast::operand>{"expression"};
-    auto const conditional =
-        x3::rule<conditional_class, ast::operand>{"conditional"};
-    auto const primary = x3::rule<primary_class, ast::operand>{"primary"};
-    auto const logical = x3::rule<logical_class, ast::expression>{"logical"};
-    auto const equality = x3::rule<equality_class, ast::expression>{"equality"};
-    auto const relational =
-        x3::rule<relational_class, ast::expression>{"relational"};
-    auto const multiplicative =
-        x3::rule<multiplicative_class, ast::expression>{"multiplicative"};
-    auto const variable = x3::rule<variable_class, std::string>{"variable"};
+    auto const expression     = x3::rule<expression_class,     ast::operand>   {"expression"};
+    auto const conditional    = x3::rule<conditional_class,    ast::operand>   {"conditional"};
+    auto const primary        = x3::rule<primary_class,        ast::operand>   {"primary"};
+    auto const logical        = x3::rule<logical_class,        ast::expression>{"logical"};
+    auto const equality       = x3::rule<equality_class,       ast::expression>{"equality"};
+    auto const relational     = x3::rule<relational_class,     ast::expression>{"relational"};
+    auto const multiplicative = x3::rule<multiplicative_class, ast::expression>{"multiplicative"};
+    auto const variable       = x3::rule<variable_class,       std::string>    {"variable"};
 
     // Rule defintions
-    // clang-format off
     auto const expression_def = conditional;
+
     auto const conditional_def =
         logical[([](auto& ctx) { _val(ctx) = _attr(ctx); })]
         >> -('?' > expression > ':' > expression)[make_conditional_op];
+
     auto const logical_def =
         equality
-        >> *(logical_op > equality);
+        >> *((logical_op > logical)
+           | (logical_op > equality));
+
     auto const equality_def =
         relational
         >> *(equality_op > relational);
+
     auto const relational_def =
         multiplicative
         >> *(relational_op > multiplicative);
+
     auto const multiplicative_def =
         primary
         >> *(multiplicative_op > primary);
-    auto const primary_def = x3::uint_ | ('(' > expression > ')') | variable;
+
+    auto const primary_def =
+        x3::uint_
+        | ('(' > expression > ')')
+        | variable;
+
     auto const variable_def = x3::lexeme[x3::alpha >> *x3::alnum];
     // clang-format on
 
@@ -167,6 +186,65 @@ namespace parser {
 
 namespace client {
 namespace ast {
+    struct printer {
+        typedef void result_type;
+
+        result_type
+        operator()(operand const& ast) const {
+            boost::apply_visitor(*this, ast.get());
+        }
+
+        result_type
+        operator()(nil) const {}
+
+        result_type
+        operator()(expression const& ast) const {
+            if (ast.rhs.size() > 0) {
+                std::cout << '(';
+            }
+            boost::apply_visitor(*this, ast.lhs);
+            BOOST_FOREACH (operation const& op, ast.rhs) { (*this)(op); }
+            if (ast.rhs.size() > 0) {
+                std::cout << ')';
+            }
+        }
+
+        result_type
+        operator()(operation const& ast) const {
+            std::cout << ' ' << ast.op.name << ' ';
+            boost::apply_visitor(*this, ast.rhs);
+        }
+
+        result_type
+        operator()(binary_op const& ast) const {
+            std::cout << '(';
+            boost::apply_visitor(*this, ast.lhs);
+            boost::apply_visitor(*this, ast.rhs);
+            std::cout << ')';
+        }
+
+        result_type
+        operator()(conditional_op const& ast) const {
+            std::cout << '(';
+            boost::apply_visitor(*this, ast.lhs);
+            std::cout << " ? ";
+            boost::apply_visitor(*this, ast.rhs_true);
+            std::cout << " : ";
+            boost::apply_visitor(*this, ast.rhs_false);
+            std::cout << ')';
+        }
+
+        result_type
+        operator()(uint const& ast) const {
+            std::cout << ast;
+        }
+
+        result_type
+        operator()(std::string const& ast) const {
+            std::cout << ast;
+        }
+    };
+
     struct evaluator {
         typedef uint result_type;
 
@@ -194,7 +272,7 @@ namespace ast {
         }
 
         result_type
-        operator()(operation const& ast, result_type lhs) const {
+        operator()(operation const& ast, uint lhs) const {
             result_type rhs = boost::apply_visitor(*this, ast.rhs);
             return ast.op(lhs, rhs);
         }
@@ -480,6 +558,7 @@ main() {
             const std::string& str{key_value.first};
             client::ast::operand program;
             client::ast::evaluator eval(idx);
+            client::ast::printer print;
 
             std::string::const_iterator iter = str.begin();
             std::string::const_iterator end = str.end();
@@ -492,6 +571,9 @@ main() {
 
                 if (result != truth) {
                     std::cout << "-------------------------" << std::endl;
+                    std::cout << "Program:    ";
+                    print(program);
+                    std::cout << std::endl;
                     std::cout << "Expression: " << std::quoted(str)
                               << std::endl;
                     std::cout << "n: " << idx << std::endl;
@@ -532,6 +614,7 @@ main() {
 
         client::ast::operand program;
         client::ast::evaluator eval(variable);
+        client::ast::printer print;
 
         std::string::const_iterator iter = str.begin();
         std::string::const_iterator end = str.end();
@@ -540,7 +623,10 @@ main() {
 
         if (r && iter == end) {
             std::cout << "-------------------------" << std::endl;
-            std::cout << "Parsing succeeded" << std::endl;
+            std::cout << "Program:    ";
+            print(program);
+            std::cout << std::endl;
+            std::cout << "Expression: " << std::quoted(str) << std::endl;
             std::cout << "Result: " << eval(program) << std::endl;
             std::cout << "-------------------------" << std::endl;
         } else {
