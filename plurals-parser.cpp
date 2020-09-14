@@ -8,9 +8,8 @@
 #include <boost/spirit/home/x3/support/ast/variant.hpp>
 #include <boost/foreach.hpp>
 
-namespace x3 = boost::spirit::x3;
-
 namespace client {
+namespace x3 = boost::spirit::x3;
 typedef unsigned int uint;
 namespace ast {
     struct nil {};
@@ -309,6 +308,7 @@ namespace ast {
 int
 main() {
     typedef unsigned int uint;
+    namespace x3 = boost::spirit::x3;
 
     std::map<std::string, std::function<uint(uint)>> test_expressions{
         std::make_pair<std::string, std::function<uint(uint)>>(
@@ -617,7 +617,7 @@ main() {
         client::ast::printer print;
 
         std::string::const_iterator iter = str.begin();
-        std::string::const_iterator end = str.end();
+        std::string::const_iterator const end = str.end();
         bool r = phrase_parse(
             iter, end, client::parser::expression, x3::space, program);
 
