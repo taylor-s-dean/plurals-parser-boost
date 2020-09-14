@@ -1,16 +1,22 @@
+#include <cstdlib>
 #include <iostream>
 #include <iomanip>
 #include <map>
 #include <boost/spirit/home/x3.hpp>
+
+#include "CLI/App.hpp"
+#include "CLI/Formatter.hpp"
+#include "CLI/Config.hpp"
+
 #include "ast.hpp"
 #include "ast_adapted.hpp"
 #include "parser.hpp"
 
-int
-main() {
-    namespace x3 = boost::spirit::x3;
-    typedef unsigned int uint;
+typedef unsigned int uint;
+namespace x3 = boost::spirit::x3;
 
+bool
+run_tests() {
     std::map<std::string, std::function<uint(uint)>> test_expressions{
         std::make_pair<std::string, std::function<uint(uint)>>(
             "0", [](uint n) { return 0; }),
@@ -253,6 +259,7 @@ main() {
             [](uint n) { return n >= 2 && (n < 11 || n > 99); }),
     };
 
+    bool success{true};
     for (const std::pair<std::string, std::function<uint(uint)>>& key_value :
          test_expressions) {
         for (uint idx = 0; idx <= 1000; ++idx) {
@@ -284,7 +291,7 @@ main() {
 
                     std::cout << "FAIL: Result did not match truth!"
                               << std::endl;
-                    return EXIT_FAILURE;
+                    success = false;
                 }
             } else {
                 std::string rest(iter, end);
@@ -296,49 +303,85 @@ main() {
         }
     }
 
-    std::cout << "///////////////////////////////////////////////////\n\n";
-    std::cout << "Expression parser...\n\n";
-    std::cout << "///////////////////////////////////////////////////\n\n";
+    return success;
+}
 
-    std::string str;
-    while (true) {
-        std::cout << "Type an expression...or [q or Q] to quit\n\n";
-        std::getline(std::cin, str);
+bool
+evaluate_plural_forms(
+    std::string plural_forms, uint n, uint& result, bool verbose) {
+    client::ast::operand program;
+    client::ast::evaluator eval(n);
+    client::ast::printer print;
 
-        if (str.empty() || str[0] == 'q' || str[0] == 'Q')
-            break;
+    std::string::const_iterator iter = plural_forms.begin();
+    std::string::const_iterator end = plural_forms.end();
+    bool r = phrase_parse(iter, end, client::expression(), x3::space, program);
 
-        std::cout << "Enter variable value: ";
-        std::string variable_str;
-        std::getline(std::cin, variable_str);
-        uint variable = std::stod(variable_str);
-
-        client::ast::operand program;
-        client::ast::evaluator eval(variable);
-        client::ast::printer print;
-
-        std::string::const_iterator iter = str.begin();
-        std::string::const_iterator end = str.end();
-        bool r =
-            phrase_parse(iter, end, client::expression(), x3::space, program);
-
-        if (r && iter == end) {
-            std::cout << "-------------------------" << std::endl;
+    if (r && iter == end) {
+        result = eval(program);
+        if (verbose) {
             std::cout << "Program:    ";
             print(program);
             std::cout << std::endl;
-            std::cout << "Expression: " << std::quoted(str) << std::endl;
-            std::cout << "Result: " << eval(program) << std::endl;
-            std::cout << "-------------------------" << std::endl;
-        } else {
+            std::cout << "Expression: " << std::quoted(plural_forms)
+                      << std::endl;
+            std::cout << "Result: " << result << std::endl;
+        }
+    } else {
+        if (verbose) {
             std::string rest(iter, end);
-            std::cout << "-------------------------" << std::endl;
             std::cout << "Parsing failed" << std::endl;
             std::cout << "stopped at: \" " << rest << "\"" << std::endl;
-            std::cout << "-------------------------" << std::endl;
+        }
+        return false;
+    }
+
+    return true;
+}
+
+int
+main(int argc, char** argv) {
+    CLI::App app{
+        "plurals-parser is a CLI tool that computes the result of a Gettext "
+        "plural-forms ternary."};
+
+    CLI::App* eval{
+        app.add_subcommand("eval", "Evaluate a plural-forms ternary.")};
+
+    std::string plural_forms;
+    eval->add_option(
+            "plural-forms", plural_forms, "A Gettext plural-forms ternary.")
+        ->required(true);
+
+    uint n;
+    eval->add_option("-n,--n", n, "The value of n.")->required(true);
+
+    bool verbose;
+    eval->add_flag("-v,--verbose", verbose, "Be verbose.")->required(false);
+
+    CLI::App* test{app.add_subcommand("test", "Run test suite.")};
+    test->add_flag("-v,--verbose", verbose, "Be verbose.")->required(false);
+
+    CLI11_PARSE(app, argc, argv);
+
+    if (app.got_subcommand("test")) {
+        if (run_tests()) {
+            std::cout << "All tests passed." << std::endl;
+        } else {
+            std::cout << "Tests failed." << std::endl;
         }
     }
 
-    std::cout << "Bye... :-) \n\n";
+    if (app.got_subcommand("eval")) {
+        uint result;
+        if (!evaluate_plural_forms(plural_forms, n, result, verbose)) {
+            std::cout << "Failed to parse plural-forms expression. Try running "
+                         "with --verbose for more information."
+                      << std::endl;
+            return EXIT_FAILURE;
+        }
+        std::cout << result << std::endl;
+    }
+
     return EXIT_SUCCESS;
 }

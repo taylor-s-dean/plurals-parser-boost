@@ -2,6 +2,7 @@ IDIR = ./include
 CXX = clang++
 CFLAGS = -I$(IDIR) \
 		 -I./third_party/boost_1_73_0 \
+		 -I./third_party/CLI11/include \
 		 -Wno-logical-op-parentheses
 
 ODIR = obj
@@ -34,7 +35,7 @@ plurals-parser: $(OBJ)
 	$(CXX) -o $@ $^ $(CFLAGS) $(LIBS)
 
 pre-build:
-	@if [ ! -d "./third_party/boost_1_73_0" ] ; then                                       \
+	@if [ ! -d "./third_party/boost_1_73_0" ] ; then                                     \
 		echo "INFO: Downloading boost libraries";                                        \
 		wget https://dl.bintray.com/boostorg/release/1.73.0/source/boost_1_73_0.tar.bz2; \
 		tar --bzip2 -xf boost_1_73_0.tar.bz2;                                            \
@@ -42,6 +43,12 @@ pre-build:
 		rm boost_1_73_0.tar.bz2;                                                         \
 	else                                                                                 \
 		echo "INFO: No need to download boost libraries";                                \
+	fi
+	@if git submodule status | egrep -q '^[-]|^[+]' ; then 		                         \
+		echo "INFO: Need to reinitialize git submodules"; 		                         \
+		git submodule update --init; 							                         \
+	else 														                         \
+		echo "INFO: No need to reinitialize git submodules"; 	                         \
 	fi
 
 clean:
