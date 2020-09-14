@@ -8,7 +8,7 @@
 
 #include "ast.hpp"
 #include "ast_adapted.hpp"
-#include "plurals.hpp"
+#include "parser.hpp"
 
 namespace client {
 namespace parser {
