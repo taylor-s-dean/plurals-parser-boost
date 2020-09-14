@@ -1,4 +1,7 @@
+![C/C++ CI](https://github.com/limitz404/plurals-parser/workflows/C/C++%20CI/badge.svg)
+
 # plural-parser
+
 A CLI tool and library intended to dynamically parse C++ style ternary, mathematical, and boolean expressions used for Gettext Plural-Forms header.
 
 ## Building
