@@ -8,7 +8,7 @@ A CLI tool and library intended to dynamically parse C++ style ternary, mathemat
 
 ```sh
 git clone git@github.com:limitz404/plurals-parser-boost.git
-cd plurals-parser
+cd plurals-parser-bison
 make
 ```
 
