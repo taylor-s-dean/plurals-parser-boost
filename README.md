@@ -1,4 +1,4 @@
-![C/C++ CI](https://github.com/limitz404/plurals-parser-boost/workflows/C/C++%20CI/badge.svg)
+![C/C++ CI](https://github.com/taylor-s-dean/plurals-parser-boost/workflows/C/C++%20CI/badge.svg)
 
 # plurals-parser
 
@@ -7,7 +7,7 @@ A CLI tool and library intended to dynamically parse C++ style ternary, mathemat
 ## Building
 
 ```sh
-git clone git@github.com:limitz404/plurals-parser-boost.git
+git clone https://github.com/taylor-s-dean/plurals-parser-boost.git
 cd plurals-parser-bison
 make
 ```
