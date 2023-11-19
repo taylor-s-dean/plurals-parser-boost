@@ -44,11 +44,11 @@ pre-build:
 	else                                                                                                \
 		echo "INFO: No need to download boost libraries";                                           \
 	fi
-	@if git submodule status | egrep -q '^[-]|^[+]' ; then 		                                    \
-		echo "INFO: Need to reinitialize git submodules"; 		                            \
-		git submodule update --init; 							            \
-	else 														                         \
-		echo "INFO: No need to reinitialize git submodules"; 	                                    \
+	@if git submodule status | egrep -q '^[-]|^[+]' ; then                                              \
+		echo "INFO: Need to reinitialize git submodules";                                           \
+		git submodule update --init;                                                                \
+	else                                                                                                \
+		echo "INFO: No need to reinitialize git submodules";                                        \
 	fi
 
 clean:
